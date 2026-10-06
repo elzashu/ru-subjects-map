@@ -3,19 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Карта России: субъекты и центры</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<title>Карта России: субъекты и центры (атласная проекция)</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-  #map { width: 100%; height: 100vh; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  #map-container {
+    position: absolute; inset: 0;
+    background: #f8fafc;
+  }
+  svg { display: block; width: 100%; height: 100%; cursor: grab; }
+  svg:active { cursor: grabbing; }
+
+  /* Регионы */
+  .region {
+    fill: #dbeafe;
+    stroke: #4f46e5;
+    stroke-width: 0.6;
+    transition: fill .15s;
+    cursor: pointer;
+  }
+  .region:hover { fill: #bfdbfe; }
+  .region.selected { fill: #a5b4fc; stroke: #4338ca; stroke-width: 1.2; }
+  .region.correct  { fill: #86efac; stroke: #16a34a; stroke-width: 1.2; }
+  .region.wrong    { fill: #fca5a5; stroke: #dc2626; stroke-width: 1.2; }
 
   /* Панель управления (слева вверху) */
   .controls {
-    position: absolute; top: 20px; left: 60px; z-index: 1000;
+    position: absolute; top: 20px; left: 20px; z-index: 100;
     background: #fff; padding: 12px 16px; border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,.15);
-    display: flex; gap: 8px; align-items: center;
+    display: flex; gap: 8px;
   }
   .mode-btn {
     padding: 8px 16px; border: 2px solid #d1d5db; background: #fff;
@@ -27,7 +46,7 @@
 
   /* Панель информации (справа вверху) */
   .info-panel {
-    position: absolute; top: 20px; right: 20px; z-index: 1000;
+    position: absolute; top: 20px; right: 20px; z-index: 100;
     background: #fff; padding: 18px 22px; border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,.15); min-width: 260px;
     max-width: 340px; display: none;
@@ -44,13 +63,13 @@
   .info-panel .close {
     position: absolute; top: 10px; right: 12px;
     background: none; border: none; font-size: 20px;
-    cursor: pointer; color: #9ca3af; line-height: 1;
+    cursor: pointer; color: #9ca3af;
   }
   .info-panel .close:hover { color: #374151; }
 
-  /* Панель теста (снизу по центру) */
+  /* Панель теста */
   .quiz-panel {
-    position: absolute; bottom: 30px; left: 50%; z-index: 1000;
+    position: absolute; bottom: 30px; left: 50%; z-index: 100;
     transform: translateX(-50%);
     background: #fff; padding: 18px 26px; border-radius: 14px;
     box-shadow: 0 6px 30px rgba(0,0,0,.2);
@@ -64,19 +83,16 @@
   }
   .quiz-panel .question {
     font-size: 22px; font-weight: 700; color: #2c3e50;
-    margin-bottom: 10px; line-height: 1.3;
+    margin-bottom: 10px;
   }
   .quiz-panel .question span { color: #4f46e5; }
-  .quiz-panel .progress {
-    font-size: 13px; color: #6b7280;
-  }
+  .quiz-panel .progress { font-size: 13px; color: #6b7280; }
   .quiz-panel .progress-bar {
     height: 6px; background: #e5e7eb; border-radius: 99px;
     overflow: hidden; margin-top: 8px;
   }
   .quiz-panel .progress-bar > div {
-    height: 100%; width: 0%; background: #4f46e5;
-    transition: width .3s;
+    height: 100%; width: 0%; background: #4f46e5; transition: width .3s;
   }
   .quiz-panel .feedback {
     margin-top: 10px; font-weight: 600; min-height: 20px; font-size: 15px;
@@ -84,17 +100,12 @@
   .quiz-panel .feedback.ok { color: #16a34a; }
   .quiz-panel .feedback.err { color: #dc2626; }
   .quiz-panel .restart-btn {
-    margin-top: 12px; padding: 9px 20px;
-    background: #4f46e5; color: #fff; border: none;
-    border-radius: 8px; font-size: 14px; font-weight: 600;
-    cursor: pointer;
+    margin-top: 12px; padding: 9px 20px; background: #4f46e5;
+    color: #fff; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .quiz-panel .restart-btn:hover { opacity: .9; }
-
-  /* Финальный результат */
-  .quiz-result {
-    display: none;
-  }
+  .quiz-result { display: none; }
   .quiz-result.visible { display: block; }
   .quiz-result .score {
     font-size: 42px; font-weight: 800; color: #4f46e5; margin: 8px 0;
@@ -103,9 +114,8 @@
     font-size: 15px; color: #374151; margin-bottom: 14px;
   }
 
-  /* Легенда */
   .legend {
-    position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+    position: absolute; bottom: 20px; left: 20px; z-index: 100;
     background: rgba(255,255,255,.95); padding: 10px 14px;
     border-radius: 8px; font-size: 12px; color: #4b5563;
     box-shadow: 0 2px 10px rgba(0,0,0,.1);
@@ -124,16 +134,17 @@
 </head>
 <body>
 
-<div id="map"></div>
+<div id="map-container">
+  <svg id="map"></svg>
+</div>
+
 <div class="loading" id="loading">Загрузка карты…</div>
 
-<!-- Переключатель режимов -->
 <div class="controls">
   <button class="mode-btn active" data-mode="explore">🔍 Обзор</button>
   <button class="mode-btn" data-mode="quiz">🎯 Тест</button>
 </div>
 
-<!-- Панель информации (режим обзора) -->
 <div class="info-panel" id="infoPanel">
   <button class="close" id="closeBtn">×</button>
   <div class="label">Регион</div>
@@ -142,7 +153,6 @@
   <div class="center" id="regionCenter">—</div>
 </div>
 
-<!-- Панель теста -->
 <div class="quiz-panel" id="quizPanel">
   <div id="quizBody">
     <div class="question-label">Найди на карте</div>
@@ -151,7 +161,6 @@
     <div class="progress" id="quizProgress">Вопрос 1 из 89</div>
     <div class="progress-bar"><div id="quizBar"></div></div>
   </div>
-
   <div class="quiz-result" id="quizResult">
     <div class="question-label">Результат</div>
     <div class="score" id="quizScore">0 / 89</div>
@@ -160,13 +169,13 @@
   </div>
 </div>
 
-<div class="legend" id="legend">Кликни по региону, чтобы увидеть центр</div>
+<div class="legend" id="legend">Кликни по региону → увидишь центр. Колесо — зум.</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
 <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
 <script>
 /* ============================================================
-   СЛОВАРЬ ЦЕНТРОВ для регионов с пустым полем capital
+   Словарь центров для регионов с пустым capital
    ============================================================ */
 const FALLBACK_CENTERS = {
   "Ненецкий автономный округ": "Нарьян-Мар",
@@ -175,7 +184,6 @@ const FALLBACK_CENTERS = {
   "Ямало-Ненецкий автономный округ": "Салехард",
   "Еврейская автономная область": "Биробиджан",
   "Кемеровская область": "Кемерово",
-  // На случай, если в данных где-то ещё пусто:
   "Кемеровская область — Кузбасс": "Кемерово",
   "Республика Крым": "Симферополь",
   "Севастополь": "Севастополь",
@@ -185,156 +193,200 @@ const FALLBACK_CENTERS = {
   "Херсонская область": "Геническ"
 };
 
-/* ============================================================
-   Карта
-   ============================================================ */
-const map = L.map('map', {
-  center: [61.5, 100],
-  zoom: 3,
-  minZoom: 2,
-  maxZoom: 8,
-  zoomControl: true
-});
-
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap &copy; CartoDB',
-  maxZoom: 19
-}).addTo(map);
+function getCenter(props) {
+  if (props.capital && props.capital.trim() !== "") return props.capital;
+  if (FALLBACK_CENTERS[props.name]) return FALLBACK_CENTERS[props.name];
+  for (const key in FALLBACK_CENTERS) {
+    if (props.name && props.name.includes(key)) return FALLBACK_CENTERS[key];
+  }
+  return "—";
+}
 
 /* ============================================================
-   Стили
+   Настройка SVG и проекции
    ============================================================ */
-const defaultStyle  = { fillColor: "#e0e7ff", weight: 1,   opacity: 1,   color: "#4f46e5", fillOpacity: 0.5  };
-const hoverStyle    = { fillColor: "#c7d2fe", weight: 2,   color: "#4f46e5", fillOpacity: 0.7  };
-const selectedStyle = { fillColor: "#a5b4fc", weight: 2.5, color: "#4338ca", fillOpacity: 0.85 };
-const correctStyle  = { fillColor: "#86efac", weight: 2.5, color: "#16a34a", fillOpacity: 0.85 };
-const wrongStyle    = { fillColor: "#fca5a5", weight: 2.5, color: "#dc2626", fillOpacity: 0.85 };
+const svg = d3.select("#map");
+const g = svg.append("g");
+
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+// Атласная (коническая равновеликая) проекция под Россию
+const projection = d3.geoAlbers()
+  .rotate([-105, 0])        // поворот: центр России ~105° в.д.
+  .center([-10, 65])        // смещение центра карты
+  .parallels([52, 64])      // стандартные параллели
+  .scale(700)
+  .translate([width / 2, height / 2]);
+
+const path = d3.geoPath().projection(projection);
+
+/* ============================================================
+   Зум и перетаскивание
+   ============================================================ */
+const zoom = d3.zoom()
+  .scaleExtent([0.8, 12])
+  .on("zoom", (event) => {
+    g.attr("transform", event.transform);
+  });
+
+svg.call(zoom);
 
 /* ============================================================
    Состояние
    ============================================================ */
-let layersByName = {};      // { название региона: L.geoJSON слой }
-let selectedLayer = null;   // текущий выделенный (режим обзора)
-let currentMode = 'explore';
+let regionsData = [];       // [{name, capital, feature, node}]
+let byName = {};            // name -> region object
+let selectedRegion = null;  // для режима обзора
+let currentMode = "explore";
 
 /* Режим теста */
-let quizQueue = [];         // перемешанный список регионов
+let quizQueue = [];
 let quizIndex = 0;
 let quizCorrect = 0;
-let quizLocked = false;     // блокировка клика во время показа ответа
+let quizLocked = false;
 
 /* ============================================================
    DOM
    ============================================================ */
-const infoPanel     = document.getElementById('infoPanel');
-const regionNameEl  = document.getElementById('regionName');
-const regionCenterEl= document.getElementById('regionCenter');
-const quizPanel     = document.getElementById('quizPanel');
-const quizBody      = document.getElementById('quizBody');
-const quizResult    = document.getElementById('quizResult');
-const quizQuestion  = document.getElementById('quizQuestion');
-const quizFeedback  = document.getElementById('quizFeedback');
-const quizProgress  = document.getElementById('quizProgress');
-const quizBar       = document.getElementById('quizBar');
-const quizScore     = document.getElementById('quizScore');
-const quizVerdict   = document.getElementById('quizVerdict');
-const legend        = document.getElementById('legend');
+const infoPanel = document.getElementById("infoPanel");
+const regionNameEl = document.getElementById("regionName");
+const regionCenterEl = document.getElementById("regionCenter");
+const quizPanel = document.getElementById("quizPanel");
+const quizBody = document.getElementById("quizBody");
+const quizResult = document.getElementById("quizResult");
+const quizQuestion = document.getElementById("quizQuestion");
+const quizFeedback = document.getElementById("quizFeedback");
+const quizProgress = document.getElementById("quizProgress");
+const quizBar = document.getElementById("quizBar");
+const quizScore = document.getElementById("quizScore");
+const quizVerdict = document.getElementById("quizVerdict");
+const legend = document.getElementById("legend");
 
-document.getElementById('closeBtn').addEventListener('click', () => {
-  infoPanel.classList.remove('visible');
-  if (selectedLayer) { selectedLayer.setStyle(defaultStyle); selectedLayer = null; }
-});
-
-/* ============================================================
-   Получить центр для региона
-   ============================================================ */
-function getCenter(props) {
-  // 1) capital из TopoJSON
-  if (props.capital && props.capital.trim() !== '') return props.capital;
-  // 2) fallback-словарь
-  if (FALLBACK_CENTERS[props.name]) return FALLBACK_CENTERS[props.name];
-  // 3) поиск по частичному совпадению
-  for (const key in FALLBACK_CENTERS) {
-    if (props.name && props.name.includes(key)) return FALLBACK_CENTERS[key];
+document.getElementById("closeBtn").addEventListener("click", () => {
+  infoPanel.classList.remove("visible");
+  if (selectedRegion) {
+    selectedRegion.node.classList.remove("selected");
+    selectedRegion = null;
   }
-  return '—';
-}
+});
 
 /* ============================================================
    Загрузка TopoJSON
    ============================================================ */
-fetch('ru-subjects-contour.topojson')
+fetch("ru-subjects-contour.topojson")
   .then(r => r.json())
   .then(topo => {
-    document.getElementById('loading').remove();
+    document.getElementById("loading").remove();
 
     const geojson = topojson.feature(topo, topo.objects.ru_subjects);
 
-    L.geoJSON(geojson, {
-      style: defaultStyle,
-      onEachFeature: (feature, layer) => {
-        const props = feature.properties || {};
-        const name = props.name || 'Неизвестный регион';
+    // Собираем данные
+    regionsData = geojson.features.map(f => ({
+      name: f.properties.name,
+      capital: getCenter(f.properties),
+      feature: f,
+      node: null
+    }));
+    byName = {};
+    regionsData.forEach(r => byName[r.name] = r);
 
-        layersByName[name] = layer;
+    // Рисуем все регионы
+    g.selectAll("path.region")
+      .data(regionsData)
+      .join("path")
+      .attr("class", "region")
+      .attr("d", d => path(d.feature))
+      .each(function (d) {
+        d.node = this;   // сохраняем DOM-узел
+      })
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        if (currentMode === "explore") handleExploreClick(d);
+        else if (currentMode === "quiz") handleQuizClick(d);
+      })
+      .on("mouseenter", (event, d) => {
+        if (currentMode === "explore" && selectedRegion !== d) {
+          d3.select(d.node).attr("fill", "#bfdbfe");
+        } else if (currentMode === "quiz" && !quizLocked) {
+          d3.select(d.node).attr("fill", "#bfdbfe");
+        }
+      })
+      .on("mouseleave", (event, d) => {
+        if (currentMode === "explore" && selectedRegion !== d) {
+          d3.select(d.node).attr("fill", null);
+        } else if (currentMode === "quiz" && !quizLocked) {
+          d3.select(d.node).attr("fill", null);
+        }
+      });
 
-        layer.bindTooltip(name, { sticky: true, direction: 'top' });
-
-        layer.on('mouseover', () => {
-          if (currentMode === 'explore') {
-            if (selectedLayer !== layer) layer.setStyle(hoverStyle);
-          } else if (currentMode === 'quiz' && !quizLocked) {
-            layer.setStyle(hoverStyle);
-          }
-        });
-
-        layer.on('mouseout', () => {
-          if (currentMode === 'explore') {
-            if (selectedLayer !== layer) layer.setStyle(defaultStyle);
-          } else if (currentMode === 'quiz' && !quizLocked) {
-            layer.setStyle(defaultStyle);
-          }
-        });
-
-        layer.on('click', () => {
-          if (currentMode === 'explore') {
-            handleExploreClick(layer, props);
-          } else if (currentMode === 'quiz') {
-            handleQuizClick(layer, name);
-          }
-        });
-      }
-    }).addTo(map);
+    // Подгоняем карту под размер окна
+    fitAllRegions();
   })
   .catch(err => {
-    console.error('Ошибка загрузки:', err);
-    document.getElementById('loading').textContent =
-      'Не удалось загрузить ru-subjects-contour.topojson. Файл должен лежать рядом с index.html.';
+    console.error(err);
+    document.getElementById("loading").textContent =
+      "Не удалось загрузить ru-subjects-contour.topojson. Проверь, что файл рядом с index.html.";
   });
 
 /* ============================================================
-   РЕЖИМ ОБЗОРА
+   Подгонка карты
    ============================================================ */
-function handleExploreClick(layer, props) {
-  if (selectedLayer && selectedLayer !== layer) {
-    selectedLayer.setStyle(defaultStyle);
-  }
-  layer.setStyle(selectedStyle);
-  selectedLayer = layer;
+function fitAllRegions() {
+  const bounds = path.bounds({
+    type: "FeatureCollection",
+    features: regionsData.map(r => r.feature)
+  });
+  const dx = bounds[1][0] - bounds[0][0];
+  const dy = bounds[1][1] - bounds[0][1];
+  const x = (bounds[0][0] + bounds[1][0]) / 2;
+  const y = (bounds[0][1] + bounds[1][1]) / 2;
+  const scale = 0.92 / Math.max(dx / width, dy / height);
+  const translate = [width / 2 - scale * x, height / 2 - scale * y];
 
-  regionNameEl.textContent = props.name || 'Неизвестный регион';
-  regionCenterEl.textContent = getCenter(props);
-  infoPanel.classList.add('visible');
+  svg.transition().duration(500).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+  );
+}
 
-  map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 7 });
+function fitToFeature(feature) {
+  const bounds = path.bounds(feature);
+  const dx = bounds[1][0] - bounds[0][0];
+  const dy = bounds[1][1] - bounds[0][1];
+  const x = (bounds[0][0] + bounds[1][0]) / 2;
+  const y = (bounds[0][1] + bounds[1][1]) / 2;
+  const scale = 0.6 / Math.max(dx / width, dy / height);
+  const translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+  svg.transition().duration(700).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+  );
 }
 
 /* ============================================================
-   РЕЖИМ ТЕСТА
+   Режим обзора
+   ============================================================ */
+function handleExploreClick(d) {
+  if (selectedRegion && selectedRegion !== d) {
+    selectedRegion.node.classList.remove("selected");
+  }
+  d.node.classList.add("selected");
+  selectedRegion = d;
+
+  regionNameEl.textContent = d.name;
+  regionCenterEl.textContent = d.capital;
+  infoPanel.classList.add("visible");
+
+  fitToFeature(d.feature);
+}
+
+/* ============================================================
+   Режим теста
    ============================================================ */
 function startQuiz() {
-  quizQueue = Object.keys(layersByName);
-  // Перемешать
+  quizQueue = regionsData.slice();
   for (let i = quizQueue.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [quizQueue[i], quizQueue[j]] = [quizQueue[j], quizQueue[i]];
@@ -343,114 +395,120 @@ function startQuiz() {
   quizCorrect = 0;
   quizLocked = false;
 
-  quizBody.style.display = 'block';
-  quizResult.classList.remove('visible');
-  quizFeedback.textContent = '';
-  quizFeedback.className = 'feedback';
+  quizBody.style.display = "block";
+  quizResult.classList.remove("visible");
+  quizFeedback.textContent = "";
+  quizFeedback.className = "feedback";
 
-  // Сбросить стили всех слоёв
-  Object.values(layersByName).forEach(l => l.setStyle(defaultStyle));
-  if (selectedLayer) { selectedLayer = null; }
+  regionsData.forEach(r => {
+    r.node.classList.remove("selected", "correct", "wrong");
+  });
+  selectedRegion = null;
+  infoPanel.classList.remove("visible");
+  legend.classList.add("hidden");
 
-  infoPanel.classList.remove('visible');
-  legend.classList.add('hidden');
-
+  fitAllRegions();
   showQuestion();
 }
 
 function showQuestion() {
-  if (quizIndex >= quizQueue.length) {
-    finishQuiz();
-    return;
-  }
-  const regionName = quizQueue[quizIndex];
-  quizQuestion.innerHTML = `«<span>${regionName}</span>»`;
-  quizFeedback.textContent = '';
-  quizFeedback.className = 'feedback';
+  if (quizIndex >= quizQueue.length) return finishQuiz();
+  const r = quizQueue[quizIndex];
+  quizQuestion.innerHTML = `«<span>${r.name}</span>»`;
+  quizFeedback.textContent = "";
+  quizFeedback.className = "feedback";
   quizProgress.textContent = `Вопрос ${quizIndex + 1} из ${quizQueue.length}`;
-  quizBar.style.width = (quizIndex / quizQueue.length * 100) + '%';
+  quizBar.style.width = (quizIndex / quizQueue.length * 100) + "%";
   quizLocked = false;
 }
 
-function handleQuizClick(layer, clickedName) {
+function handleQuizClick(d) {
   if (quizLocked) return;
-  const targetName = quizQueue[quizIndex];
+  const target = quizQueue[quizIndex];
 
-  if (clickedName === targetName) {
-    // Верно
+  if (d === target) {
     quizCorrect++;
-    quizFeedback.textContent = '✅ Верно!';
-    quizFeedback.className = 'feedback ok';
-    layer.setStyle(correctStyle);
-    map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 7 });
+    d.node.classList.add("correct");
+    quizFeedback.textContent = "✅ Верно!";
+    quizFeedback.className = "feedback ok";
+    fitToFeature(d.feature);
   } else {
-    // Неверно
-    quizFeedback.textContent = `❌ Неверно. Правильный ответ: ${targetName}`;
-    quizFeedback.className = 'feedback err';
-    layer.setStyle(wrongStyle);
-    const correctLayer = layersByName[targetName];
-    if (correctLayer) {
-      correctLayer.setStyle(correctStyle);
-      map.fitBounds(correctLayer.getBounds(), { padding: [40, 40], maxZoom: 7 });
-    }
+    d.node.classList.add("wrong");
+    target.node.classList.add("correct");
+    quizFeedback.textContent = `❌ Неверно. Правильный ответ: ${target.name}`;
+    quizFeedback.className = "feedback err";
+    fitToFeature(target.feature);
   }
 
   quizLocked = true;
-
   setTimeout(() => {
-    // Сбросить стили
-    Object.values(layersByName).forEach(l => l.setStyle(defaultStyle));
+    regionsData.forEach(r => r.node.classList.remove("correct", "wrong"));
     quizIndex++;
     showQuestion();
   }, 1600);
 }
 
 function finishQuiz() {
-  quizBar.style.width = '100%';
-  quizBody.style.display = 'none';
-  quizResult.classList.add('visible');
+  quizBar.style.width = "100%";
+  quizBody.style.display = "none";
+  quizResult.classList.add("visible");
 
   const total = quizQueue.length;
   const percent = Math.round(quizCorrect / total * 100);
   quizScore.textContent = `${quizCorrect} / ${total}`;
 
-  if (percent === 100)      quizVerdict.textContent = '🏆 Идеально! Все регионы найдены.';
-  else if (percent >= 80)   quizVerdict.textContent = '👍 Отлично! Есть что подтянуть.';
-  else if (percent >= 50)   quizVerdict.textContent = '📚 Неплохо, но стоит повторить.';
-  else                      quizVerdict.textContent = '💪 Нужно ещё потренироваться.';
+  if (percent === 100)    quizVerdict.textContent = "🏆 Идеально!";
+  else if (percent >= 80) quizVerdict.textContent = "👍 Отлично!";
+  else if (percent >= 50) quizVerdict.textContent = "📚 Неплохо, но повтори.";
+  else                    quizVerdict.textContent = "💪 Нужно ещё тренироваться.";
+
+  fitAllRegions();
 }
 
 /* ============================================================
    Переключение режимов
    ============================================================ */
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
     const mode = btn.dataset.mode;
-
     if (mode === currentMode) return;
     currentMode = mode;
 
-    // Сброс общего состояния
-    infoPanel.classList.remove('visible');
-    if (selectedLayer) { selectedLayer.setStyle(defaultStyle); selectedLayer = null; }
+    infoPanel.classList.remove("visible");
+    if (selectedRegion) {
+      selectedRegion.node.classList.remove("selected");
+      selectedRegion = null;
+    }
 
-    if (mode === 'explore') {
-      quizPanel.classList.remove('visible');
-      legend.classList.remove('hidden');
-      Object.values(layersByName).forEach(l => l.setStyle(defaultStyle));
-      map.setView([61.5, 100], 3);
-    } else if (mode === 'quiz') {
-      quizPanel.classList.add('visible');
-      legend.classList.add('hidden');
+    if (mode === "explore") {
+      quizPanel.classList.remove("visible");
+      legend.classList.remove("hidden");
+      regionsData.forEach(r => r.node.classList.remove("correct", "wrong"));
+      fitAllRegions();
+    } else {
+      quizPanel.classList.add("visible");
+      legend.classList.add("hidden");
       startQuiz();
     }
   });
 });
 
-/* Кнопка «Пройти заново» */
-document.getElementById('quizRestart').addEventListener('click', startQuiz);
+document.getElementById("quizRestart").addEventListener("click", startQuiz);
+
+/* ============================================================
+   Пересчёт при изменении размера окна
+   ============================================================ */
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    svg.attr("viewBox", `0 0 ${w} ${h}`);
+  }, 200);
+});
 </script>
 </body>
 </html>
